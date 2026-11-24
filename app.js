@@ -92,6 +92,7 @@ var loader = {
     return id;
   },
   hide: function(id){ this.items.delete(id); this.render(); },
+  update: function(id, label){ var it = this.items.get(id); if(it){ it.label = label; this.render(); } },
   render: function(){
     var ov = $('dvLoading');
     if(!this.items.size){ ov.classList.remove('dv-show','dv-block'); return; }
@@ -124,11 +125,28 @@ var nav = {
     });
   }
 };
-try{ history.replaceState({dv:0}, ''); }catch(e){}
+try{ history.replaceState({dv:'base'}, ''); }catch(e){}
+var exitArmed = false, exitTimer = 0, guardSet = false;
+/* A guard entry is added on the first tap so the system Back button lands on the app, not outside it */
+document.addEventListener('click', function(){
+  if(guardSet) return;
+  guardSet = true;
+  try{ history.pushState({dv:'root'}, ''); }catch(e){}
+}, true);
 window.addEventListener('popstate', function(){
   var c = nav.stack.pop();
   if(nav.pending > 0) nav.pending--;
   if(c){ try{ c(); }catch(e){} }
+  else {
+    /* Back pressed on the main screens: ask once, then exit on the second press */
+    if(exitArmed){ exitArmed = false; clearTimeout(exitTimer); try{ history.back(); }catch(e){} }
+    else if(guardSet){
+      exitArmed = true;
+      toast('Press back again to exit', 'warn');
+      try{ history.pushState({dv:'root'}, ''); }catch(e){}
+      exitTimer = setTimeout(function(){ exitArmed = false; }, 2000);
+    }
+  }
   var w = nav.waiters.splice(0);
   w.forEach(function(f){ f(); });
 });
@@ -285,9 +303,11 @@ var page = {
     var cleanup = build(body);
     nav.push(function(){
       pg.classList.remove('dv-open');
+      hap(8);
       if(typeof cleanup === 'function'){ try{ cleanup(); }catch(e){} }
       setTimeout(function(){ pg.remove(); }, 300);
     });
+    hap(12);
     requestAnimationFrame(function(){ pg.classList.add('dv-open'); });
   }
 };
@@ -360,7 +380,7 @@ function noRecordingInfo(s){
   return {
     title: 'No recording found', icon: 'warn',
     paragraphs: [
-      '\u201C' + s.title + '\u201D is a public domain song, but Carol Songs could not find a public domain recording of it on the Internet Archive or Wikimedia Commons yet.',
+      '\u201C' + s.title + '\u201D is a public domain song, but Carol Songs could not find a public domain recording of it online yet.',
       'Try again later, or use Find more songs online in the Library to add recordings you pick yourself.'
     ]
   };
@@ -408,18 +428,7 @@ async function findOnline(){
     await modal.info({ title: 'You are offline', icon: 'warn', paragraphs: ['Connect to Wi-Fi or mobile data to find more songs. Songs saved offline still play.'] });
     return;
   }
-  var term = dv.query.trim();
-  var pick = await modal.choose({
-    title: 'Find more songs', icon: 'public',
-    message: term ? 'Searching for \u201C' + term + '\u201D. Choose where to look.' : 'Choose where to look.',
-    options: [
-      { id: 'ia-strict', label: 'Internet Archive', sub: 'Recorded before 1926', icon: 'public' },
-      { id: 'ia-pd', label: 'Internet Archive', sub: 'Marked public domain', icon: 'public' },
-      { id: 'wm', label: 'Wikimedia Commons', sub: 'Free-licensed audio', icon: 'public' }
-    ]
-  });
-  if(!pick) return;
-  await fetchFlow([pick], term);
+  await fetchFlow(['ia-strict','ia-pd','wm'], dv.query.trim());
 }
 
 async function ensureLibrary(){
@@ -454,7 +463,9 @@ function filtered(){
   var words = dv.query.toLowerCase().split(/\s+/).filter(Boolean);
   if(words.length){
     arr = arr.filter(function(s){
-      var hay = (s.title + ' ' + s.artist + ' ' + (s.year || '')).toLowerCase();
+      var hay = [s.title, s.artist, s.year || '', s.recTitle || '', (s.names || []).join(' '),
+        s.kind === 'recording' ? 'recording my voice personal' : (s.kind === 'hymn' ? 'hymn' : (s.kind === 'carol' ? 'carol christmas' : ''))
+      ].join(' ').toLowerCase();
       return words.every(function(w){ return hay.indexOf(w) !== -1; });
     });
   }
@@ -470,10 +481,32 @@ function flags(s){
   var f = el('span','dv-flags');
   if(s.fav){ var h = icon('heart'); h.setAttribute('class','dv-i dv-heart'); f.appendChild(h); }
   if(dv.offline.has(s.id) && s.source !== 'rec'){ f.appendChild(icon('done')); f.appendChild(document.createTextNode('Offline')); }
-  if(!f.childNodes.length) f.textContent = s.source === 'rec' ? 'My recording' : s.source === 'catalog' ? (s.kind === 'hymn' ? 'Hymn' : 'Christmas carol') : (s.source === 'ia' ? 'Internet Archive' : 'Wikimedia Commons');
+  if(!f.childNodes.length) f.textContent = s.source === 'rec' ? 'My recording' : s.source === 'catalog' ? (s.kind === 'hymn' ? 'Hymn' : 'Christmas carol') : 'Online recording';
   return f;
 }
 function metaLine(s){ return s.artist + (s.year ? ' (' + s.year + ')' : ''); }
+
+/* Long-press a song to open its menu, with a stronger haptic tap */
+function onLongPress(node, fn){
+  var timer = 0, fired = false, sx = 0, sy = 0;
+  node.addEventListener('touchstart', function(e){
+    fired = false;
+    if(!e.touches || !e.touches[0]) return;
+    var t = e.touches[0];
+    sx = t.clientX; sy = t.clientY;
+    clearTimeout(timer);
+    timer = setTimeout(function(){ fired = true; hap(H.warn); fn(); }, 550);
+  }, { passive: true });
+  node.addEventListener('touchmove', function(e){
+    if(!e.touches || !e.touches[0]) return;
+    var t = e.touches[0];
+    if(Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) clearTimeout(timer);
+  }, { passive: true });
+  node.addEventListener('touchend', function(e){ clearTimeout(timer); if(fired && e.cancelable) e.preventDefault(); });
+  node.addEventListener('touchcancel', function(){ clearTimeout(timer); });
+  node.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  node.addEventListener('click', function(e){ if(fired){ fired = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+}
 
 function listRow(s, i, list){
   var li = el('li','dv-row' + (isNow(s) ? ' dv-now' : ''));
@@ -488,6 +521,7 @@ function listRow(s, i, list){
   tx.appendChild(flags(s));
   main.appendChild(th); main.appendChild(tx);
   main.addEventListener('click', function(){ tapSong(list, i); });
+  onLongPress(main, function(){ songMenu(s); });
   var more = el('button','dv-ic');
   more.type = 'button';
   more.setAttribute('aria-label','More actions for ' + s.title);
@@ -509,6 +543,7 @@ function gridCard(s, i, list){
   tx.appendChild(flags(s));
   main.appendChild(th); main.appendChild(tx);
   main.addEventListener('click', function(){ tapSong(list, i); });
+  onLongPress(main, function(){ songMenu(s); });
   var more = el('button','dv-ic dv-more');
   more.type = 'button';
   more.setAttribute('aria-label','More actions for ' + s.title);
@@ -645,10 +680,9 @@ function songDetails(s){
   box.appendChild(el('p','','Artist: ' + s.artist));
   box.appendChild(el('p','','Year: ' + (s.year || 'Unknown')));
   box.appendChild(el('p','','License: ' + s.license));
-  var srcName = s.source === 'rec' ? 'Recorded on this phone' : s.source === 'ia' ? 'Internet Archive' : (s.source === 'wm' ? 'Wikimedia Commons'
-    : (s.recSource === 'ia' ? 'Internet Archive' : (s.recSource === 'wm' ? 'Wikimedia Commons' : 'Not found yet')));
   if(s.source === 'catalog') box.appendChild(el('p','','Type: ' + (s.kind === 'hymn' ? 'Hymn' : 'Christmas carol') + ' (public domain song)'));
-  box.appendChild(el('p','','Recording source: ' + srcName));
+  if(s.source === 'rec') box.appendChild(el('p','','Source: Recorded on this phone'));
+  else if(s.source === 'catalog' && !s.src) box.appendChild(el('p','','Recording: found when you first play it'));
   if(s.recTitle) box.appendChild(el('p','','Recording: ' + s.recTitle));
   var a = el('a','dv-link');
   a.href = s.page; a.target = '_blank'; a.rel = 'noopener noreferrer';
@@ -717,7 +751,7 @@ async function toggleOffline(s){
     });
     if(!yes) return;
     S.offlineNote = true; saveS();
-    try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+    requestPersist();
   }
   var ctrl = new AbortController();
   var cancelled = false;
@@ -739,6 +773,78 @@ async function toggleOffline(s){
     dv.saving.delete(s.id);
   }
   renderAll();
+}
+
+/* ================= Persistent storage + download options ================= */
+/* Asks Chrome to keep this app's database (saved songs and recordings) from being cleared */
+async function requestPersist(){
+  try{
+    if(!(navigator.storage && navigator.storage.persist)) return false;
+    if(navigator.storage.persisted && await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  }catch(e){ return false; }
+}
+
+async function downloadMenu(){
+  var pending = sorted().filter(function(s){ return s.source !== 'rec' && !dv.offline.has(s.id); });
+  var cur = dv.cur && dv.cur.source !== 'rec' && !dv.offline.has(dv.cur.id) ? dv.cur : null;
+  var options = [];
+  if(cur) options.push({ id: 'cur', label: 'Download the playing song', sub: cur.title, icon: 'download' });
+  options.push({ id: 'all', label: 'Download all songs', sub: pending.length ? plural(pending.length, 'song', 'songs') + ' not saved yet' : 'Everything is saved already', icon: 'download' });
+  var pick = await modal.choose({ title: 'Download for offline', message: 'Saved songs play without internet and stay on this phone.', icon: 'download', options: options });
+  if(pick === 'cur') toggleOffline(cur);
+  else if(pick === 'all') downloadAll();
+}
+
+async function downloadAll(){
+  var list = sorted().filter(function(s){ return s.source !== 'rec' && !dv.offline.has(s.id); });
+  if(!list.length){ toast('All songs are already saved','ok'); return; }
+  if(!navigator.onLine){
+    await modal.info({ title: 'You are offline', icon: 'warn', paragraphs: ['Connect to Wi-Fi or mobile data to download songs.'] });
+    return;
+  }
+  var ok = await modal.confirm({
+    title: 'Download all songs?', icon: 'download', confirmText: 'Download',
+    message: plural(list.length, 'song', 'songs') + ' will be saved on this phone. This can use a lot of data and storage (about 3 to 5 MB per song) and may take several minutes. Wi-Fi is recommended. Keep Carol Songs open until it finishes.'
+  });
+  if(!ok) return;
+  requestPersist();
+  var ctrl = new AbortController();
+  var cancelled = false, full = false;
+  var saved = 0, missing = 0, failed = 0;
+  var lid = loader.show('Preparing download', { block: true, cancel: function(){ cancelled = true; ctrl.abort(); } });
+  try{
+    for(var i = 0; i < list.length && !cancelled; i++){
+      var s = list[i];
+      loader.update(lid, 'Saving ' + (i + 1) + ' of ' + list.length + ': ' + s.title);
+      try{
+        var blob = await DV.download.saveOffline(s, ctrl.signal);
+        await dbPut('blobs', { id: s.id, blob: blob });
+        dv.offline.add(s.id);
+        saved++;
+      }catch(e){
+        if(cancelled) break;
+        if(e && e.code === 'NO_RECORDING') missing++;
+        else if(e && e.name === 'QuotaExceededError'){ full = true; break; }
+        else failed++;
+      }
+    }
+  } finally {
+    loader.hide(lid);
+  }
+  renderAll();
+  if(full){
+    await modal.info({ title: 'Storage is full', icon: 'warn', paragraphs: [plural(saved, 'song was', 'songs were') + ' saved before the phone ran out of space.', 'Free some space and run the download again to continue.'] });
+  } else if(cancelled){
+    toast('Stopped. ' + plural(saved, 'song', 'songs') + ' saved.', 'warn');
+  } else if(!missing && !failed){
+    toast('All songs saved offline', 'ok');
+  } else {
+    var lines = [plural(saved, 'song was', 'songs were') + ' saved offline.'];
+    if(missing) lines.push(plural(missing, 'song has', 'songs have') + ' no public domain recording online yet.');
+    if(failed) lines.push(plural(failed, 'song', 'songs') + ' could not be downloaded. Try again later.');
+    await modal.info({ title: 'Download finished', icon: 'info', paragraphs: lines });
+  }
 }
 
 /* ================= Playback ================= */
@@ -856,7 +962,7 @@ function sync(){
   var ob = $('dvBtnOff'), off = !!(s && dv.offline.has(s.id));
   ob.classList.toggle('dv-on', off);
   setIcon(ob, off ? 'done' : 'download');
-  ob.querySelector('span').textContent = s && dv.saving.has(s.id) ? 'Saving' : (off ? 'Saved' : 'Offline');
+  ob.querySelector('span').textContent = s && dv.saving.has(s.id) ? 'Saving' : (off ? 'Saved' : 'Download');
   document.querySelectorAll('#dvLibList [data-sid]').forEach(function(row){
     var now = !!(s && row.dataset.sid === s.id);
     row.classList.toggle('dv-now', now);
@@ -921,16 +1027,64 @@ function openDrawer(side){
   var d = $(side === 'l' ? 'dvDrawerL' : 'dvDrawerR');
   d.classList.add('dv-open');
   $('dvScrim').classList.add('dv-show');
+  hap(12);
   nav.push(function(){
     d.classList.remove('dv-open');
     $('dvScrim').classList.remove('dv-show');
+    hap(8);
   });
+}
+
+/* Swipe a sidebar toward its own edge to close it (left sidebar: swipe left, right sidebar: swipe right) */
+function swipeClose(drawer, side){
+  var sign = side === 'l' ? -1 : 1;
+  var x0 = 0, y0 = 0, t0 = 0, tracking = false, dragging = false, progress = 0;
+  function reset(ms){
+    drawer.style.transition = 'transform ' + ms + 'ms ease';
+    drawer.style.transform = 'translateX(0)';
+    setTimeout(function(){ drawer.style.transition = ''; drawer.style.transform = ''; }, ms + 30);
+  }
+  drawer.addEventListener('touchstart', function(e){
+    if(!e.touches || e.touches.length !== 1 || (e.target && e.target.closest && e.target.closest('input[type=range]'))){ tracking = false; return; }
+    var t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); tracking = true; dragging = false; progress = 0;
+  }, { passive: true });
+  drawer.addEventListener('touchmove', function(e){
+    if(!tracking || !e.touches || !e.touches[0]) return;
+    var t = e.touches[0];
+    var dx = (t.clientX - x0) * sign, dy = Math.abs(t.clientY - y0);
+    if(!dragging){
+      if(dy > 14 && dy > Math.abs(dx)){ tracking = false; return; }
+      if(dx > 14 && dx > dy){ dragging = true; drawer.style.transition = 'none'; }
+    }
+    if(dragging){
+      progress = Math.max(0, dx);
+      drawer.style.transform = 'translateX(' + (progress * sign) + 'px)';
+    }
+  }, { passive: true });
+  function end(){
+    if(!tracking || !dragging){ tracking = false; return; }
+    tracking = false; dragging = false;
+    var fast = progress > 60 && progress / Math.max(1, Date.now() - t0) > 0.5;
+    if(progress > window.innerWidth * 0.3 || fast){
+      drawer.style.transition = 'transform .2s ease';
+      drawer.style.transform = 'translateX(' + (sign * 100) + '%)';
+      nav.back();
+      setTimeout(function(){ drawer.style.transition = ''; drawer.style.transform = ''; }, 330);
+    } else reset(180);
+  }
+  drawer.addEventListener('touchend', end);
+  drawer.addEventListener('touchcancel', function(){ if(dragging){ dragging = false; tracking = false; reset(180); } });
 }
 $('dvScrim').addEventListener('click', function(){ nav.back(); });
 $('dvMenuL').addEventListener('click', function(){ openDrawer('l'); });
 $('dvMenuR').addEventListener('click', function(){ openDrawer('r'); });
+$('dvDrBackL').addEventListener('click', function(){ nav.back(); });
+$('dvDrBackR').addEventListener('click', function(){ nav.back(); });
+swipeClose($('dvDrawerL'), 'l');
+swipeClose($('dvDrawerR'), 'r');
 
-async function fromDrawer(fn){ await nav.back(); fn(); }
+async function fromDrawer(fn){ fn(); }
 
 /* ================= Documents (left menu) ================= */
 function docBuild(blocks){
@@ -1060,7 +1214,7 @@ function socialRow(){
 
 var DOCS = {
   about: { title: 'About the App', icon: 'info', build: docBuild([
-    { logo: true, h: 'Carol Songs', p: ['Carol Songs brings public domain Christmas carols and hymns together in one place. Its built-in library of 40 carols and 30 hymns finds a public domain recording of each song on the Internet Archive and Wikimedia Commons, and keeps the songs you choose on this phone.'] },
+    { logo: true, h: 'Carol Songs', p: ['Carol Songs brings public domain Christmas carols and hymns together in one place. Its built-in library of 40 carols and 30 hymns finds a public domain recording of each song online, and keeps the songs you choose on this phone.'] },
     { h: 'What you can do', ul: [
       'Stream carols with Previous, Play, Next, shuffle, repeat and volume control.',
       'Search your library and switch between list and grid views.',
@@ -1076,12 +1230,13 @@ var DOCS = {
   how: { title: 'How to Use', icon: 'help', build: docBuild([
     { h: 'Getting started', ol: [
       'Open the Library tab. It already holds 40 Christmas carols and 30 hymns. Use the Carols and Hymns filters to browse.',
-      'Type in the search bar to filter your library. Tap Find more songs online to add more from the Internet Archive or Wikimedia Commons.',
+      'Type in the search bar to filter your library. Tap Find more songs online to add more recordings.',
       'Tap a song to play it. Tap it again to pause. The first time you play a song, Carol Songs looks for a public domain recording of it, so that first play needs internet.',
       'Open the MP3 tab for Previous, Play, Next, shuffle, repeat and the Volume button.',
       'Tap Favorite on the MP3 tab, or the menu button on any song, to favorite it, save it offline, see its license or remove it.',
       'Use the Recent, Favorites and Offline filters in the Library to find songs quickly.',
-      'Open the Record tab to record your own voice. Tap the red button to start, Pause or Stop when you are done, and name your recording. Find it in the Library under My Voice.'
+      'Open the Record tab to record your own voice. Tap the red button to start, Pause or Stop when you are done, and name your recording. Find it in the Library under My Voice.',
+      'To keep songs for offline listening, tap Download on the MP3 tab or the download button in the Library. Choose the song that is playing or all songs.'
     ] },
     { h: 'Tools menu', p: ['Tap the three dots at the top right for dark mode, the to-do list, the calculator, text size, Install App and Share App.'] },
     { h: 'Offline listening', p: ['Songs saved offline play without internet. Open Library, choose the Offline filter, and tap a song.'] }
@@ -1090,7 +1245,7 @@ var DOCS = {
     { ol: [
       'Acceptance. By using Carol Songs you agree to these terms. If you do not agree, please stop using the app.',
       'Personal use. Carol Songs is provided for personal, non-commercial listening.',
-      'Third-party content. Songs are provided by the Internet Archive and Wikimedia Commons and their contributors. Carol Songs does not host the audio files.',
+      'Third-party content. Recordings are provided by third-party online archives and their contributors. Carol Songs does not host the audio files.',
       'Public domain status. The songs and melodies in the built-in library are in the public domain, but every recording is a separate work, so Carol Songs only plays recordings that are public domain or freely licensed. Filters such as recorded before 1926 are a guide, not a legal guarantee. Copyright rules differ between countries, so always confirm the license on the song\u2019s source page before using a song outside this app.',
       'Offline copies. Songs you save offline are for your own listening and must not be redistributed or sold.',
       'Voice recordings. Recordings you make are stored only on this phone and are never uploaded by Carol Songs. Record only with the consent of anyone whose voice you capture.',
@@ -1354,7 +1509,6 @@ function isStandalone(){
   try{ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }catch(e){ return false; }
 }
 async function installApp(){
-  await nav.back();
   if(isStandalone()){ toast('Carol Songs is already installed','ok'); return; }
   if(dv.installEvt){
     var ev = dv.installEvt;
@@ -1393,7 +1547,7 @@ async function shareApp(){
     await modal.info({ title: 'Copy the link', icon: 'link', message: 'Select the link below and copy it.', content: inp, buttonText: 'Done' });
   }
 }
-$('dvItShare').addEventListener('click', async function(){ await nav.back(); shareApp(); });
+$('dvItShare').addEventListener('click', function(){ shareApp(); });
 
 /* ================= Library + tab events ================= */
 (function buildChips(){
@@ -1434,6 +1588,19 @@ $('dvQaSearch').addEventListener('click', function(){
   setTab('lib');
   setTimeout(function(){ $('dvQ').focus(); }, 250);
 });
+$('dvQaLatest').addEventListener('click', async function(){
+  var recs = sorted().filter(function(s){ return s.source === 'rec'; });
+  if(!recs.length){
+    var go = await modal.confirm({ title: 'No recordings yet', message: 'Record your voice now?', confirmText: 'Record', icon: 'mic' });
+    if(go) setTab('rec');
+    return;
+  }
+  recs.sort(function(x, y){ return (y.order || 0) - (x.order || 0); });
+  dv.queue = recs;
+  playIndex(0);
+  setTab('mp3');
+  toast('Playing your latest recording');
+});
 $('dvQaLib').addEventListener('click', function(){
   dv.filter = 'all'; dv.query = ''; $('dvQ').value = '';
   setTab('lib');
@@ -1450,7 +1617,11 @@ $('dvRepeat').addEventListener('click', function(){
   toast(['Repeat off','Repeat one song','Repeat all songs'][dv.repeat]);
 });
 $('dvBtnFav').addEventListener('click', function(){ if(!dv.cur){ toast('Play a song first','warn'); return; } toggleFav(dv.cur); });
-$('dvBtnOff').addEventListener('click', function(){ if(!dv.cur){ toast('Play a song first','warn'); return; } toggleOffline(dv.cur); });
+$('dvBtnOff').addEventListener('click', function(){
+  if(dv.cur && dv.cur.source !== 'rec' && dv.offline.has(dv.cur.id)){ toggleOffline(dv.cur); return; }
+  downloadMenu();
+});
+$('dvLibDl').addEventListener('click', downloadMenu);
 $('dvBtnInfo').addEventListener('click', function(){ if(!dv.cur){ toast('Play a song first','warn'); return; } songDetails(dv.cur); });
 
 var volRange = $('dvVolRange');
@@ -1533,7 +1704,7 @@ if('mediaSession' in navigator){
 
 /* ================= Voice recorder ================= */
 var REC_MAX = 600; /* seconds (10 minutes) */
-var rec = { state: 'idle', mr: null, stream: null, chunks: [], mime: '', t0: 0, acc: 0, timer: 0, ctx: null, raf: 0, autoPaused: false };
+var rec = { state: 'idle', mr: null, stream: null, chunks: [], mime: '', t0: 0, acc: 0, timer: 0, ctx: null, raf: 0, autoPaused: false, wake: null };
 
 function recSupported(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -1662,6 +1833,7 @@ async function recStart(){
   rec.acc = 0; rec.t0 = Date.now(); rec.state = 'recording'; rec.autoPaused = false;
   mr.start(1000);
   recMeterStart();
+  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(function(l){ rec.wake = l; }).catch(function(){}); }catch(e){}
   rec.timer = setInterval(function(){
     $('dvRecTime').textContent = fmt(recElapsed());
     if(recElapsed() >= REC_MAX){ toast('10 minute limit reached. Saving your recording.', 'warn'); recStop(false); }
@@ -1695,6 +1867,7 @@ function recStop(discard){
   var mime = (mr && mr.mimeType) || rec.mime;
   clearInterval(rec.timer);
   recMeterStop();
+  if(rec.wake){ try{ rec.wake.release(); }catch(e){} rec.wake = null; }
   rec.state = 'idle'; rec.acc = 0; rec.autoPaused = false;
   rec.mr = null; rec.stream = null; rec.chunks = [];
   recRender();
@@ -1736,6 +1909,7 @@ async function recFinish(chunks, mime, dur){
     await dbPut('songs', song);
     dv.songs.set(id, song);
     dv.offline.add(id);
+    requestPersist();
     toast('Recording saved to My Voice', 'ok');
   }catch(e){
     if(e && e.name === 'QuotaExceededError') await modal.info({ title: 'Storage is full', icon: 'warn', paragraphs: ['The recording could not be saved because the phone is out of space. Free some space and record again.'] });
@@ -1791,7 +1965,7 @@ document.addEventListener('visibilitychange', function(){
 
 /* ================= Install + connectivity ================= */
 window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); dv.installEvt = e; });
-window.addEventListener('appinstalled', function(){ dv.installEvt = null; toast('Carol Songs installed','ok'); });
+window.addEventListener('appinstalled', function(){ dv.installEvt = null; requestPersist(); toast('Carol Songs installed','ok'); });
 window.addEventListener('online', function(){ toast('Back online','ok'); });
 window.addEventListener('offline', function(){ toast('You are offline. Saved songs still play.','warn'); });
 
@@ -1805,6 +1979,7 @@ async function init(){
   }catch(e){}
   try{
     await DV.db.open();
+    requestPersist();
     var songs = await dbAll('songs');
     songs.forEach(function(s){
       dv.songs.set(s.id, s);
