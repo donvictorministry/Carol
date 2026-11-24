@@ -6,11 +6,19 @@
 <meta name="theme-color" content="#FDFBFF" id="dvThemeColor">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Carol Songs</title>
+<meta name="description" content="Public domain Christmas carols and hymns to stream, record your own voice, and keep offline.">
+<!-- Link preview for WhatsApp and Facebook. Replace https://YOUR-USERNAME.github.io/YOUR-REPO/ with your real site address (2 places). -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Carol Songs">
+<meta property="og:title" content="Carol Songs">
+<meta property="og:description" content="Public domain Christmas carols and hymns. Stream, record your own voice and keep songs offline.">
+<meta property="og:url" content="https://YOUR-USERNAME.github.io/YOUR-REPO/">
+<meta property="og:image" content="https://YOUR-USERNAME.github.io/YOUR-REPO/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Carol Songs">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%231877F2'/%3E%3Cpath fill='%23FFD54A' d='M12 17.27L16.5 20l-1.2-5.1L19.3 11.4l-5.2-.45L12 6.2 9.9 10.95 4.7 11.4l3.95 3.5L7.5 20z'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -103,6 +111,7 @@
         <button class="dv-tile" id="dvQaPlay" type="button"><span class="dv-circ"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-play"/></svg></span><b>Play Songs</b></button>
         <button class="dv-tile" id="dvQaSearch" type="button"><span class="dv-circ"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-search"/></svg></span><b>Search Songs</b></button>
         <button class="dv-tile" id="dvQaLib" type="button"><span class="dv-circ"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-lib"/></svg></span><b>Songs Library</b></button>
+        <button class="dv-tile dv-wide" id="dvQaLatest" type="button"><span class="dv-circ"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-mic"/></svg></span><b>Latest Recording</b></button>
       </div>
     </section>
 
@@ -128,7 +137,7 @@
       <div class="dv-sec">
         <button id="dvBtnVol" type="button" aria-label="Volume"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-vol"/></svg><span>Volume</span></button>
         <button id="dvBtnFav" type="button" aria-label="Favorite"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-heart-o"/></svg><span>Favorite</span></button>
-        <button id="dvBtnOff" type="button" aria-label="Save offline"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-download"/></svg><span>Offline</span></button>
+        <button id="dvBtnOff" type="button" aria-label="Save offline"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-download"/></svg><span>Download</span></button>
         <button id="dvBtnInfo" type="button" aria-label="Song details"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-info"/></svg><span>Details</span></button>
       </div>
       <div class="dv-volpanel" id="dvVolPanel">
@@ -150,6 +159,7 @@
       </div>
       <div class="dv-bar">
         <span id="dvCount">0 songs</span>
+        <button class="dv-dlbtn" id="dvLibDl" type="button" aria-label="Download songs"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-download"/></svg></button>
         <div class="dv-vt" role="group" aria-label="View">
           <button id="dvViewList" type="button" aria-label="List view" aria-pressed="true"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-list"/></svg></button>
           <button id="dvViewGrid" type="button" aria-label="Grid view" aria-pressed="false"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-grid"/></svg></button>
@@ -195,6 +205,7 @@
 <div class="dv-scrim" id="dvScrim"></div>
 
 <aside class="dv-drawer dv-left" id="dvDrawerL" aria-label="Main menu">
+  <div class="dv-dr-bar"><button class="dv-ic" id="dvDrBackL" type="button" aria-label="Back"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-back"/></svg></button><h2>Menu</h2></div>
   <div class="dv-dr-head">
     <div class="dv-dr-logo"><svg viewBox="0 0 24 24"><use href="#i-star"/></svg></div>
     <div><b>Carol Songs</b><span>by Biblefirm</span></div>
@@ -203,6 +214,7 @@
 </aside>
 
 <aside class="dv-drawer dv-right" id="dvDrawerR" aria-label="Tools menu">
+  <div class="dv-dr-bar"><button class="dv-ic" id="dvDrBackR" type="button" aria-label="Back"><svg class="dv-i" viewBox="0 0 24 24"><use href="#i-back"/></svg></button><h2>More options</h2></div>
   <div class="dv-dr-head">
     <div class="dv-dr-logo"><svg viewBox="0 0 24 24"><use href="#i-menu"/></svg></div>
     <div><b>Tools</b><span>Settings and helpers</span></div>
