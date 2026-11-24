@@ -47,7 +47,7 @@
 [hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
 html{font-size:19px;-webkit-text-size-adjust:100%;text-size-adjust:100%;width:100%;height:100%}
-body{width:100dvw;height:100dvh;overflow:hidden;background:var(--dv-bg);color:var(--dv-on);font-family:'Roboto',system-ui,sans-serif;font-size:1rem;line-height:1.4;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+body{width:100dvw;height:100dvh;overflow:hidden;background:var(--dv-bg);color:var(--dv-on);font-family:Roboto,system-ui,-apple-system,sans-serif;font-size:1rem;line-height:1.4;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
 input,textarea{-webkit-user-select:text;user-select:text;font-family:inherit;font-size:1rem;color:inherit}
 button{font-family:inherit;font-size:1rem;color:inherit;background:none;border:0;cursor:pointer;position:relative;overflow:hidden;text-align:inherit;transition:transform .12s ease,background-color .15s ease,opacity .15s ease}
 button:active:not(:disabled){transform:scale(.96)}
@@ -163,11 +163,11 @@ svg.dv-i{width:24px;height:24px;fill:currentColor;flex:none;display:block}
 /* scrim + drawers */
 .dv-scrim{position:fixed;inset:0;z-index:40;background:var(--dv-scrim);opacity:0;visibility:hidden;transition:opacity .25s,visibility 0s linear .25s}
 .dv-scrim.dv-show{opacity:1;visibility:visible;transition:opacity .25s}
-.dv-drawer{position:fixed;top:0;bottom:0;z-index:50;width:86dvw;background:var(--dv-bg);color:var(--dv-on);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;visibility:hidden;transition:transform .28s ease,visibility 0s linear .28s;padding-bottom:var(--dv-bot)}
-.dv-drawer.dv-left{left:0;transform:translateX(-102%);border-radius:0 28px 28px 0}
-.dv-drawer.dv-right{right:0;transform:translateX(102%);border-radius:28px 0 0 28px}
+.dv-drawer{position:fixed;top:0;bottom:0;z-index:50;width:100dvw;touch-action:pan-y;background:var(--dv-bg);color:var(--dv-on);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;visibility:hidden;transition:transform .28s ease,visibility 0s linear .28s;padding-bottom:var(--dv-bot)}
+.dv-drawer.dv-left{left:0;transform:translateX(-102%);border-radius:0}
+.dv-drawer.dv-right{right:0;transform:translateX(102%);border-radius:0}
 .dv-drawer.dv-open{transform:none;visibility:visible;transition:transform .28s ease}
-.dv-dr-head{display:flex;align-items:center;gap:14px;padding:calc(20px + var(--dv-top)) 20px 16px}
+.dv-dr-head{display:flex;align-items:center;gap:14px;padding:20px 20px 12px}
 .dv-dr-logo{width:56px;height:56px;border-radius:18px;background:var(--dv-primary);display:flex;align-items:center;justify-content:center;flex:none}
 .dv-dr-logo svg{width:34px;height:34px;fill:var(--dv-gold)}
 .dv-dr-head b{display:block;font-size:1.3rem}
@@ -300,3 +300,11 @@ svg.dv-i{width:24px;height:24px;fill:currentColor;flex:none;display:block}
 .dv-soc.dv-tel{background:#1A73E8}
 .dv-soc.dv-fb{background:#1877F2}
 @media (prefers-reduced-motion:reduce){.dv-gear,.dv-recbtn.dv-live{animation:none!important}}
+
+/* ===== Sidebars: full-screen app bar with back arrow at the far left ===== */
+.dv-dr-bar{flex:none;display:flex;align-items:center;gap:4px;height:calc(64px + var(--dv-top));padding:var(--dv-top) 8px 0;background:var(--dv-sc)}
+.dv-dr-bar h2{flex:1;min-width:0;font-size:1.35rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== Latest Recording tile, Library download button ===== */
+.dv-tile.dv-wide{grid-column:1 / -1;min-height:88px;flex-direction:row;align-items:center;justify-content:flex-start;gap:16px}
+.dv-dlbtn{width:48px;height:48px;border-radius:50%;background:var(--dv-pc);color:var(--dv-on-pc);display:flex;align-items:center;justify-content:center;flex:none;margin-left:auto;margin-right:8px}
