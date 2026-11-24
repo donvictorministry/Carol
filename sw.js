@@ -1,5 +1,5 @@
 /* Carol Songs service worker */
-const DV_VERSION = 'dv-carol-v3';
+const DV_VERSION = 'dv-carol-v4';
 const DV_SHELL = ['./', './index.html', './styles.css', './app.js', './songs.js', './download.js', './manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -31,21 +31,6 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
-    );
-    return;
-  }
-
-  // Google Fonts: cache first
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
-    event.respondWith(
-      caches.match(req).then((hit) => {
-        if (hit) return hit;
-        return fetch(req).then((res) => {
-          const copy = res.clone();
-          caches.open(DV_VERSION).then((c) => c.put(req, copy));
-          return res;
-        });
-      })
     );
     return;
   }
